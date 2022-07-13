@@ -33,6 +33,8 @@ a bot, and create the core logic by overriding some functions.
 
 
 (struct Config (host user port idfile args) #:transparent)
+(struct SshChatBot (conf cmd-tasks sched-tasks) #:transparent)
+
 
 
 
@@ -46,6 +48,10 @@ a bot, and create the core logic by overriding some functions.
           "port"
           "file"
           '()))
+
+
+(define (make-bot conf)
+  (SshChatBot )
 
 
 ; Create an SSH subprocess from a config struct
