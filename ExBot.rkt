@@ -6,20 +6,16 @@ Showcases ideas used to create the bot
 and prototype new functionality.
 |#
 
-(require "main.rkt")
+(require "scb.rkt")
 
 
-; Define our basic connection information
-(define conf
-  (make-config #:host "0.0.0.0"
-               #:user "ExBot"
-               #:port "2022"
-               ))
+(define-bot ExBot
+  (host "0.0.0.0")
+  (port "2022")
+  (command "!hello"
+           (λ (msg) (void))))
+  
 
-
-(define bot 0)
-
-
-(run-bot bot)
+(displayln ExBot)
 
 ; end

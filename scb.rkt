@@ -25,60 +25,88 @@ a bot, and create the core logic by overriding some functions.
 
 (require (only-in racket/contract -> ->* define/contract and/c or/c any/c)
          (only-in racket/match match)
+         (only-in racket/string string-trim)
          )
 
-(provide (struct-out Config)
-         (struct-out SshChatBot)
+(provide (struct-out SshBot)
+         host
+         port
+         args
+         id-file
+         command
+         define-bot
          )
 
 
-(struct Config (host user port idfile args) #:transparent)
-(struct SshChatBot (conf cmd-tasks sched-tasks) #:transparent)
+(struct SshBot (user host port idfile args cmds) #:transparent)
 
 
+(define (init-bot name)
+  (SshBot (format "~a" name)
+          "" "" "" '() '()))
+
+(define (host new-host)
+  (λ (old-state)
+    (struct-copy SshBot old-state [host new-host])))
+
+(define (port new-port)
+  (λ (old-state)
+    (struct-copy SshBot old-state [port new-port])))
+
+(define (args new-args)
+  (λ (old-state)
+    (struct-copy SshBot old-state [args new-args])))
+
+(define (id-file new-idfile)
+  (λ (old-state)
+    (struct-copy SshBot old-state [idfile new-idfile])))
+
+(define (command keystr fun)
+  (λ (old-state)
+    old-state))
 
 
-(define (make-config #:host    [host "0.0.0.0"]
-                     #:user    [user "user"]
-                     #:port    [port "2222"]
-                     #:keyfile [keyfile ""]
-                     #:args    [args '()])
-  (Config "host"
-          "user"
-          "port"
-          "file"
-          '()))
+; Run a function on some state
+(define (run-state fun scc)
+  (fun scc))
+
+; Fold a list of functions over some starting initial state
+(define (fold-functions name functions)
+  (foldl run-state (init-bot name) functions))
 
 
-(define (make-bot conf)
-  (SshChatBot )
+(define-syntax-rule (define-bot name fun ...)
+  (define name
+    (fold-functions (format "~a" 'name)
+                    (list fun ...))))
+
 
 
 ; Create an SSH subprocess from a config struct
-(define/contract (make-ssh-from-config conf)
-  (-> Config? (values subprocess? input-port? output-port? (or/c #f input-port?)))
+(define/contract (make-ssh-from-bot bot)
+  (-> SshBot? (values subprocess? input-port? output-port? (or/c #f input-port?)))
   (apply subprocess
          `(#f #f 'stdout
            ,(find-executable-path "ssh")
-           ,(format "-p ~a" (Config-port conf))
-           ,@(let ([idfile (Config-idfile conf)])
+           ,(format "-p ~a" (SshBot-port bot))
+           ,@(let ([idfile (SshBot-idfile bot)])
                (if (file-exists? idfile)
                    (list
-                    (format "-i ~a" idfile)))
+                    (format "-i ~a" idfile))
                   '()))
            ,(format "-o SetEnv TERM=bot")
-           ,@(Config-args conf)
+           ,@(SshBot-args bot)
            ,(format "~a@~a"
-                    (Config-user conf)
-                    (Config-host conf))))
+                    (SshBot-user bot)
+                    (SshBot-host bot)))))
   
 
 
 ; Generate the i/o stub functions to interact with the subprocess
-(define/contract (create-ssh-io conf)
-  (-> Config? (values subprocess? procedure? procedure?))
+(define/contract (create-ssh-io bot)
+  (-> SshBot? (values subprocess? procedure? procedure?))
   (define-values (S OUT IN ERR)
-    (make-ssh-from-config conf))
+    (make-ssh-from-bot bot))
   (define (read!)
     (read-line OUT 'return))
   (define (write! msg)
@@ -101,7 +129,7 @@ a bot, and create the core logic by overriding some functions.
       ([regexp #rx"(.*):(.*)"] (displayln "user message"))
       (else
        (displayln "uncategorized")))
-    (displayln v)
+    (displayln msg)
     (sleep 1)
     (loop))
   (loop))
