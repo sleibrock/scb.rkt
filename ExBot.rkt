@@ -8,14 +8,14 @@ and prototype new functionality.
 
 (require "scb.rkt")
 
-
 (define-bot ExBot
   (host "0.0.0.0")
   (port "2022")
+  (debug-mode)
   (command "!hello"
-           (λ (msg) (void))))
+           (λ (msg writer ST) (void))))
   
-
-(displayln ExBot)
+; Run the bot with the run-bot function
+(run-bot ExBot)
 
 ; end
