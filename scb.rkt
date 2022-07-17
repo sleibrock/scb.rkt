@@ -26,6 +26,7 @@ a bot, and create the core logic by overriding some functions.
 (require (only-in racket/contract -> ->* define/contract and/c or/c any/c)
          (only-in racket/match match)
          (only-in racket/string string-trim)
+         "Hash.rkt"
          )
 
 (provide (struct-out SshBot)
@@ -40,6 +41,14 @@ a bot, and create the core logic by overriding some functions.
          )
 
 
+; the SshBot struct interface
+; user   - username used during the ssh session
+; host   - the target domain for the ssh connection
+; port   - the listen port on the target domain server (default: 22)
+; idfile - path to an id file to use, nullable
+; args   - a list of string arguments to provide to the ssh session
+; cmds   - a hash of commands to bind to the bot
+; debug? - debugging mode to print warnings/errors/verbose output
 (struct SshBot (user host port idfile args cmds debug?) #:transparent)
 
 
@@ -50,17 +59,22 @@ a bot, and create the core logic by overriding some functions.
 ; constructors with many args and provides an easier API for writing
 (define (init-bot name)
   (SshBot (format "~a" name)
-          "" "" "" '() '() #f))
+          "" "22" "" '()
+          (make-immutable-hash '())
+          #f))
+
 
 ; Change the host to a given host string (ex. "0.0.0.0" or "ssh.chat")
 (define (host new-host)
   (λ (old-state)
     (struct-copy SshBot old-state [host new-host])))
 
+
 ; Change the port to a new given port (ex. "2022" or 22)
 (define (port new-port)
   (λ (old-state)
     (struct-copy SshBot old-state [port new-port])))
+
 
 ; Change the arguments to supply to the ssh program
 ; (ex. ("-o SetTheme=mono" "-p 22"))
@@ -68,17 +82,22 @@ a bot, and create the core logic by overriding some functions.
   (λ (old-state)
     (struct-copy SshBot old-state [args new-args])))
 
+
 ; Change the id file to a provided one (ex. "~/.ssh/id_rsa")
 (define (id-file new-idfile)
   (λ (old-state)
     (struct-copy SshBot old-state [idfile new-idfile])))
+
 
 ; Add a command for any users to invoke and execute a logic function
 ; TODO: check arguments to match whatever we need for invoking commands
 ; TODO: add a command hash to the bot to store commands
 (define (command keystr fun)
   (λ (old-state)
-    old-state))
+    (let ([old-cmds (SshBot-cmds old-state)])
+      (struct-copy SshBot old-state
+                   [cmds (Hash:update old-cmds keystr fun)]))))
+
 
 ; Turn on debug mode for developers
 (define (debug-mode)
@@ -116,6 +135,9 @@ a bot, and create the core logic by overriding some functions.
 
 
 ; Boilerplate macro - run code only while a subprocess is alive
+; between function calls and looping, the ssh connection could
+; randomly die, so it's important to track errors accordingly
+; and branch to handle the if/else case
 (define-syntax-rule (while-alive S code ...)
   (if (eqv? 'running (subprocess-status S))
       (begin code ...)
