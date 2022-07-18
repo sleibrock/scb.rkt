@@ -5,7 +5,10 @@ Hash.rkt - a simple hash macro library
 |#
 
 
-(provide all-defined-out)
+(provide Hash:get
+         Hash:update
+         Hash:update-else
+         )
 
 
 ;; Provide an easy way of accessing a hash key

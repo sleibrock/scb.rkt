@@ -184,13 +184,26 @@ a bot, and create the core logic by overriding some functions.
     (define msg (read!))
     (when (eof-object? msg)
       (error "EOF received, terminating bot"))
-    (match (string-trim msg)
-      ([regexp #rx"\\* (.*?) (left|joined)\\.*"] (displayln "join/leave"))
-      ([regexp #rx"(.*):(.*)"] (displayln "user msg"))
-      (else
-       (displayln "uncategorized")))
-    (displayln msg)
-    (loop state))
+    (define trimmed-msg (string-trim msg))
+    (if (string=? "" trimmed-msg)
+        (loop state)
+        (begin
+          (match trimmed-msg 
+            ; process a join/leave event
+            ([regexp #rx"\\* (.*) (left|joined)\\. \\(Connected: (.*)\\)"
+                     (list _ user _ usercnt)]
+             (begin
+               (printf "[J/L] ~a joined or left\n" user)))
+
+            ; process a user message
+            ([regexp #rx"(.*):(.*)" (list _ user newmsg)]
+             (begin
+               (printf "[MSG] ~a wrote:~a\n" user newmsg)))
+
+            ; blank or malformed msg caught
+            (else
+             (displayln "uncategorized")))
+          (loop state))))
   (loop 0))
 
 
