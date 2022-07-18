@@ -144,6 +144,24 @@ a bot, and create the core logic by overriding some functions.
       (error "ssh process closed early")))
 
 
+; Chat utility functions - helpers for generating proper ssh-chat commands
+; Useful for designing bot commands and provides a simple interface for
+; designing interactions and all sorts of programs
+(define (names)
+  "/names")
+
+(define (ban target)
+  "/ban target 24h")
+
+(define (kick target)
+  "/kick target")
+
+(define (whois target)
+  "/whois target")
+
+
+
+
 ; Create an SSH subprocess from a bot struct and create
 ; the general i/o function stubs to interact
 (define/contract (start-ssh bot)
@@ -196,14 +214,14 @@ a bot, and create the core logic by overriding some functions.
                      (list _ user j/l _)]
              (begin
                (if (string=? j/l "joined")
-                   (printf "[UJC] ~a joined the chat" user)
-                   (printf "[ULC] ~a left the chat" user))
+                   (printf "[UJC] ~a joined the chat\n" user)
+                   (printf "[ULC] ~a left the chat\n" user))
                (loop state)))
 
-            ; process a user message
-            ([regexp #rx"(.*?):(.*)" (list _ user new-msg)]
+            ; handle a general "emote" action
+            ([regexp #rx"\\*\\* (.*?) (.*)" (list _ user emote-msg)]
              (begin
-               (printf "[MSG] ~a wrote:~a\n" user new-msg)
+               (printf "[EMO] ~a did: ~a\n" user emote-msg)
                (loop state)))
 
             ; handle a direct message/private message
@@ -212,19 +230,18 @@ a bot, and create the core logic by overriding some functions.
                (printf "[PM] ~a wrote: ~a\n" user priv-msg)
                (loop state)))
 
-            ; handle a general "emote" action
-            ([regexp #rx"\\*\\* (.*?) (.*)" (list _ user emote-msg)]
+            ; process a user message
+            ([regexp #rx"(.*?):(.*)" (list _ user new-msg)]
              (begin
-               (printf "[EMO] ~a did: ~a" user emote-msg)
+               (printf "[MSG] ~a wrote:~a\n" user new-msg)
                (loop state)))
             
             ; blank or malformed msg caught
             (else
              (begin
                (displayln "uncategorized")
-               (loop state))))
-  (loop 0))
-
+               (loop state)))))))
+  (loop (make-immutable-hash '())))
 
 
 ; Testing section for unit tests / etc
