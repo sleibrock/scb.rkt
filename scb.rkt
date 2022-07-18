@@ -190,20 +190,39 @@ a bot, and create the core logic by overriding some functions.
         (begin
           (match trimmed-msg 
             ; process a join/leave event
-            ([regexp #rx"\\* (.*) (left|joined)\\. \\(Connected: (.*)\\)"
-                     (list _ user _ usercnt)]
+            ; join - includes number of active users
+            ; leave - shows time user spent connected
+            ([regexp #rx"\\* (.*) (left|joined)\\.(.*)"
+                     (list _ user j/l _)]
              (begin
-               (printf "[J/L] ~a joined or left\n" user)))
+               (if (string=? j/l "joined")
+                   (printf "[UJC] ~a joined the chat" user)
+                   (printf "[ULC] ~a left the chat" user))
+               (loop state)))
 
             ; process a user message
-            ([regexp #rx"(.*):(.*)" (list _ user newmsg)]
+            ([regexp #rx"(.*?):(.*)" (list _ user new-msg)]
              (begin
-               (printf "[MSG] ~a wrote:~a\n" user newmsg)))
+               (printf "[MSG] ~a wrote:~a\n" user new-msg)
+               (loop state)))
 
+            ; handle a direct message/private message
+            ([regexp #rx"\\[PM from (.*)\\] (.*)" (list _ user priv-msg)]
+             (begin
+               (printf "[PM] ~a wrote: ~a\n" user priv-msg)
+               (loop state)))
+
+            ; handle a general "emote" action
+            ([regexp #rx"\\*\\* (.*?) (.*)" (list _ user emote-msg)]
+             (begin
+               (printf "[EMO] ~a did: ~a" user emote-msg)
+               (loop state)))
+            
             ; blank or malformed msg caught
             (else
-             (displayln "uncategorized")))
-          (loop state))))
+             (begin
+               (displayln "uncategorized")
+               (loop state))))
   (loop 0))
 
 
