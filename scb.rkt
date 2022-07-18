@@ -49,7 +49,7 @@ a bot, and create the core logic by overriding some functions.
 ; args   - a list of string arguments to provide to the ssh session
 ; cmds   - a hash of commands to bind to the bot
 ; debug? - debugging mode to print warnings/errors/verbose output
-(struct SshBot (user host port idfile args cmds debug?) #:transparent)
+(struct SshBot (user host port idfile args cmds join-evt leave-evt debug?) #:transparent)
 
 
 ; These functions are used to initialize an ssh-chat bot
@@ -59,9 +59,15 @@ a bot, and create the core logic by overriding some functions.
 ; constructors with many args and provides an easier API for writing
 (define (init-bot name)
   (SshBot (format "~a" name)
-          "" "22" "" '()
+          ""
+          "22"
+          ""
+          '()
           (make-immutable-hash '())
-          #f))
+          (λ (_ _ ST) ST)
+          (λ (_ _ ST) ST)
+          #f
+          ))
 
 
 ; Change the host to a given host string (ex. "0.0.0.0" or "ssh.chat")
@@ -97,6 +103,14 @@ a bot, and create the core logic by overriding some functions.
     (let ([old-cmds (SshBot-cmds old-state)])
       (struct-copy SshBot old-state
                    [cmds (Hash:update old-cmds keystr fun)]))))
+
+(define (on-join fun)
+  (λ (old-state)
+    (struct-copy SshBot old-state [join-evt fun])))
+
+(define (on-leave fun)
+  (λ (old-state)
+    (struct-copy SshBot old-state [leave-evt fun])))
 
 
 ; Turn on debug mode for developers
@@ -210,13 +224,16 @@ a bot, and create the core logic by overriding some functions.
             ; process a join/leave event
             ; join - includes number of active users
             ; leave - shows time user spent connected
-            ([regexp #rx"\\* (.*) (left|joined)\\.(.*)"
-                     (list _ user j/l _)]
-             (begin
-               (if (string=? j/l "joined")
+            ([regexp #rx"\\* (.*) (left|joined)\\.(.*)" (list _ user j/l _)]
+             (cond
+               ([string=? j/l "joined"]
+                (begin
                    (printf "[UJC] ~a joined the chat\n" user)
-                   (printf "[ULC] ~a left the chat\n" user))
-               (loop state)))
+                   (loop ((SshBot-join-evt bot) user write! state))))
+               (else
+                (begin
+                  (printf "[ULC] ~a left the chat\n" user)
+                  (loop ((SshBot-leave-evt bot) user write! state)))))
 
             ; handle a general "emote" action
             ([regexp #rx"\\*\\* (.*?) (.*)" (list _ user emote-msg)]
