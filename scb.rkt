@@ -38,6 +38,11 @@ a bot, and create the core logic by overriding some functions.
          debug-mode
          define-bot
          run-bot
+         on-msg
+         on-pm
+         on-join
+         on-leave
+         add-scheduled-task
          )
 
 
@@ -49,7 +54,8 @@ a bot, and create the core logic by overriding some functions.
 ; args   - a list of string arguments to provide to the ssh session
 ; cmds   - a hash of commands to bind to the bot
 ; debug? - debugging mode to print warnings/errors/verbose output
-(struct SshBot (user host port idfile args cmds join-evt leave-evt debug?) #:transparent)
+(struct SshBot (user host port idfile args msg-evt pm-evt cmds timers join-evt leave-evt debug?)
+  #:transparent)
 
 
 ; These functions are used to initialize an ssh-chat bot
@@ -59,14 +65,17 @@ a bot, and create the core logic by overriding some functions.
 ; constructors with many args and provides an easier API for writing
 (define (init-bot name)
   (SshBot (format "~a" name)
-          ""
-          "22"
-          ""
-          '()
-          (make-immutable-hash '())
-          (λ (_ _ ST) ST)
-          (λ (_ _ ST) ST)
-          #f
+          ""                            ; host
+          "22"                          ; port
+          ""                            ; id file
+          '()                           ; ssh arguments
+          (λ (usr msg writer ST) ST)    ; message event
+          (λ (usr msg writer ST) ST)    ; pm evt
+          (make-immutable-hash '())     ; commands
+          '()                           ; timer tasks
+          (λ (usr writer ST) ST)        ; join event
+          (λ (usr writer ST) ST)        ; leave event
+          #f                            ; debug option
           ))
 
 
@@ -95,6 +104,11 @@ a bot, and create the core logic by overriding some functions.
     (struct-copy SshBot old-state [idfile new-idfile])))
 
 
+(define (on-msg fun)
+  (λ (old-state)
+    (struct-copy SshBot old-state [resp fun])))
+
+
 ; Add a command for any users to invoke and execute a logic function
 ; TODO: check arguments to match whatever we need for invoking commands
 ; TODO: add a command hash to the bot to store commands
@@ -104,13 +118,24 @@ a bot, and create the core logic by overriding some functions.
       (struct-copy SshBot old-state
                    [cmds (Hash:update old-cmds keystr fun)]))))
 
+
+; Define an on-join function for when users enter the chat
 (define (on-join fun)
   (λ (old-state)
     (struct-copy SshBot old-state [join-evt fun])))
 
+
+; Define an on-leave function for when users leave the chat
 (define (on-leave fun)
   (λ (old-state)
     (struct-copy SshBot old-state [leave-evt fun])))
+
+
+(define (add-scheduled-task fun)
+  (λ (old-state)
+    (let ([old-timers (SshBot-timers old-state)])
+      (struct-copy SshBot old-state
+                   [timers (cons fun old-timers)]))))
 
 
 ; Turn on debug mode for developers
@@ -141,7 +166,7 @@ a bot, and create the core logic by overriding some functions.
 ; (define-bot SampleBot
 ;   (host "127.0.0.1")
 ;   (port "2022")
-;   (command "!hello" (λ (msg) (void))))
+;   (command "!hello" (λ (msg writer ST) ST))
 (define-syntax-rule (define-bot name fun ...)
   (define name
     (fold-functions (format "~a" 'name)
@@ -165,15 +190,27 @@ a bot, and create the core logic by overriding some functions.
   "/names")
 
 (define (ban target)
-  "/ban target 24h")
+  (format "/ban target 24h"))
 
+
+; Execute a kick command
 (define (kick target)
-  "/kick target")
+  (format "/kick ~a" target))
 
+
+; execute a whois command, but provides complex output
 (define (whois target)
-  "/whois target")
+  (format "/whois ~a" target))
 
 
+; Encapsulate this into a composable function with the writers
+(define (pm target msg)
+  (format "/msg ~a ~a")
+
+
+; Create a macro to express the ability to run code every so often
+(define-syntax-rule (every stx)
+  (void))
 
 
 ; Create an SSH subprocess from a bot struct and create
@@ -202,7 +239,7 @@ a bot, and create the core logic by overriding some functions.
     (while-alive S (read-line OUT 'return)))
   (define (write! msg)
     (while-alive S
-                 (displayln (format "~a\r\n" msg))
+                 (displayln (format "~a\r\n" msg) IN)
                  (flush-output IN)))
   (values S read! write!))
   
@@ -216,49 +253,58 @@ a bot, and create the core logic by overriding some functions.
     (define msg (read!))
     (when (eof-object? msg)
       (error "EOF received, terminating bot"))
+
     (define trimmed-msg (string-trim msg))
+
+    ; begin parsing - if no message/text, loop back
+    ; else, begin interpreting the message
     (if (string=? "" trimmed-msg)
         (loop state)
-        (begin
-          (match trimmed-msg 
-            ; process a join/leave event
-            ; join - includes number of active users
-            ; leave - shows time user spent connected
-            ([regexp #rx"\\* (.*) (left|joined)\\.(.*)" (list _ user j/l _)]
-             (cond
-               ([string=? j/l "joined"]
-                (begin
-                   (printf "[UJC] ~a joined the chat\n" user)
-                   (loop ((SshBot-join-evt bot) user write! state))))
-               (else
-                (begin
-                  (printf "[ULC] ~a left the chat\n" user)
-                  (loop ((SshBot-leave-evt bot) user write! state)))))
-
-            ; handle a general "emote" action
-            ([regexp #rx"\\*\\* (.*?) (.*)" (list _ user emote-msg)]
-             (begin
-               (printf "[EMO] ~a did: ~a\n" user emote-msg)
-               (loop state)))
-
-            ; handle a direct message/private message
-            ([regexp #rx"\\[PM from (.*)\\] (.*)" (list _ user priv-msg)]
-             (begin
-               (printf "[PM] ~a wrote: ~a\n" user priv-msg)
-               (loop state)))
-
-            ; process a user message
+        (match trimmed-msg 
+          ; process a join/leave event
+          ; join - includes number of active users
+          ; leave - shows time user spent connected
+          ([regexp #rx"\\* (.*) (left|joined)\\.(.*)" (list _ user j/l _)]
+           (cond
+             ([string=? j/l "joined"]
+              (begin
+                (printf "[UJC] ~a joined the chat\n" user)
+                (loop ((SshBot-join-evt bot) user write! state))))
+             (else
+              (begin
+                (printf "[ULC] ~a left the chat\n" user)
+                (loop ((SshBot-leave-evt bot) user write! state))))))
+           
+           ; handle a general "emote" action
+           ([regexp #rx"\\*\\* (.*?) (.*)" (list _ user emote-msg)]
+            (begin
+              (printf "[EMO] ~a did: ~a\n" user emote-msg)
+              (loop state)))
+           
+           ; handle a direct message/private message
+           ([regexp #rx"\\[PM from (.*)\\] (.*)" (list _ user priv-msg)]
+            (begin
+              (printf "[PM] ~a wrote: ~a\n" user priv-msg)
+              (loop ((SshBot-resp bot) user
+                                       (string-trim priv-msg)
+                                       (compose write! (pm user))
+                                       state))))
+           
+           ; process a user message
             ([regexp #rx"(.*?):(.*)" (list _ user new-msg)]
              (begin
                (printf "[MSG] ~a wrote:~a\n" user new-msg)
-               (loop state)))
+               (loop ((SshBot-resp bot) user
+                                        (string-trim new-msg)
+                                        write!
+                                        state))))
             
             ; blank or malformed msg caught
             (else
              (begin
                (displayln "uncategorized")
-               (loop state)))))))
-  (loop (make-immutable-hash '())))
+               (loop state))))))
+    (loop (make-immutable-hash '())))
 
 
 ; Testing section for unit tests / etc
