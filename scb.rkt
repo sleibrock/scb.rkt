@@ -43,6 +43,7 @@ a bot, and create the core logic by overriding some functions.
          on-join
          on-leave
          add-scheduled-task
+         pm
          )
 
 
@@ -106,7 +107,11 @@ a bot, and create the core logic by overriding some functions.
 
 (define (on-msg fun)
   (λ (old-state)
-    (struct-copy SshBot old-state [resp fun])))
+    (struct-copy SshBot old-state [msg-evt fun])))
+
+(define (on-pm fun)
+  (λ (old-state)
+    (struct-copy SshBot old-state [pm-evt fun])))
 
 
 ; Add a command for any users to invoke and execute a logic function
@@ -205,7 +210,7 @@ a bot, and create the core logic by overriding some functions.
 
 ; Encapsulate this into a composable function with the writers
 (define (pm target msg)
-  (format "/msg ~a ~a")
+  (format "/msg ~a ~a" target msg))
 
 
 ; Create a macro to express the ability to run code every so often
@@ -285,19 +290,19 @@ a bot, and create the core logic by overriding some functions.
            ([regexp #rx"\\[PM from (.*)\\] (.*)" (list _ user priv-msg)]
             (begin
               (printf "[PM] ~a wrote: ~a\n" user priv-msg)
-              (loop ((SshBot-resp bot) user
-                                       (string-trim priv-msg)
-                                       (compose write! (pm user))
-                                       state))))
+              (loop ((SshBot-pm-evt bot) user
+                                        (string-trim priv-msg)
+                                        write!
+                                        state))))
            
            ; process a user message
             ([regexp #rx"(.*?):(.*)" (list _ user new-msg)]
              (begin
                (printf "[MSG] ~a wrote:~a\n" user new-msg)
-               (loop ((SshBot-resp bot) user
-                                        (string-trim new-msg)
-                                        write!
-                                        state))))
+               (loop ((SshBot-msg-evt bot) user
+                                          (string-trim new-msg)
+                                          write!
+                                          state))))
             
             ; blank or malformed msg caught
             (else
