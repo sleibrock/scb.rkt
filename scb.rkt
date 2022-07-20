@@ -26,7 +26,7 @@ a bot, and create the core logic by overriding some functions.
 (require (only-in racket/contract -> ->* define/contract and/c or/c any/c)
          (only-in racket/match match)
          (only-in racket/string string-trim)
-         "Hash.rkt"
+         "State.rkt"
          )
 
 (provide (struct-out SshBot)
@@ -121,7 +121,7 @@ a bot, and create the core logic by overriding some functions.
   (λ (old-state)
     (let ([old-cmds (SshBot-cmds old-state)])
       (struct-copy SshBot old-state
-                   [cmds (Hash:update old-cmds keystr fun)]))))
+                   [cmds (State:update old-cmds keystr fun)]))))
 
 
 ; Define an on-join function for when users enter the chat
