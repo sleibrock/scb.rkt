@@ -194,7 +194,7 @@ A scheduled task can be generated away from the main bot thread and this observe
 
 ### Magic Behind `define-bot`
 
-The reasoning for the `define-bot` macro is to make it as dead-simple as possible to make a custom `ssh-chat` bot. Due to the inherent nature of Racket, mutating data is generally a bad idea, and where possible, we want to try to avoid mutating data, and would instead copy data and modify the new copies in transition.
+The reasoning for the `define-bot` macro is to make it as dead-simple as possible to make a custom `ssh-chat` bot. Due to the inherent nature of Racket, mutating data is generally a bad idea, and where possible, we want to try to avoid mutating data, and would instead copy data and add or subtract additional data.
 
 That means, in order to define a regular bot, you would have to somehow pack a whole lot of information into a single (or more) `struct` data types, making it rather difficult to pass arguments into without frustrating users.
 
@@ -210,7 +210,7 @@ In this case, this might work:
                     ST)))))
 ```
 
-This works, but is very hard to extend. The more information you start putting in, the clumsier and faster this will become. It would be better if we could somehow start with an empty struct and modify the information as we go, making it easier for the user to decide what elements they want and don't want.
+This works, but is very hard to extend. The more information you start putting in, the clumsier it gets and it will fall apart faster. It would be better if we could somehow start with an empty struct and modify the information as we go, making it easier for the user to decide what elements they want and don't want.
 
 ```racket
 (struct SshBot (user host port args commands) #:transparent)

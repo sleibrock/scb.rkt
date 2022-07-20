@@ -251,16 +251,21 @@ a bot, and create the core logic by overriding some functions.
 
 ; Main bot looping code to execute all logic
 (define (run-bot bot)
+  ; start the ssh connection here
   (define-values (sub read! write!)
     (start-ssh bot))
-
+  
   (define (loop state)
+    ; read an input message
     (define msg (read!))
+    
+    ; check if we received EOF or not
     (when (eof-object? msg)
-      (error "EOF received, terminating bot"))
-
+      (error (format "EOF received, terminating ~a" (SshBot-user bot))))
+    
+    ; trim it
     (define trimmed-msg (string-trim msg))
-
+    
     ; begin parsing - if no message/text, loop back
     ; else, begin interpreting the message
     (if (string=? "" trimmed-msg)
@@ -279,37 +284,38 @@ a bot, and create the core logic by overriding some functions.
               (begin
                 (printf "[ULC] ~a left the chat\n" user)
                 (loop ((SshBot-leave-evt bot) user write! state))))))
-           
-           ; handle a general "emote" action
-           ([regexp #rx"\\*\\* (.*?) (.*)" (list _ user emote-msg)]
-            (begin
-              (printf "[EMO] ~a did: ~a\n" user emote-msg)
-              (loop state)))
-           
-           ; handle a direct message/private message
-           ([regexp #rx"\\[PM from (.*)\\] (.*)" (list _ user priv-msg)]
-            (begin
-              (printf "[PM] ~a wrote: ~a\n" user priv-msg)
-              (loop ((SshBot-pm-evt bot) user
+          
+          ; handle a general "emote" action
+          ; TODO: implement an emote handler
+          ([regexp #rx"\\*\\* (.*?) (.*)" (list _ user emote-msg)]
+           (begin
+             (printf "[EMO] ~a did: ~a\n" user emote-msg)
+             (loop state)))
+          
+          ; handle a direct message/private message
+          ([regexp #rx"\\[PM from (.*)\\] (.*)" (list _ user priv-msg)]
+           (begin
+             (printf "[PM] ~a wrote: ~a\n" user priv-msg)
+             (loop ((SshBot-pm-evt bot) user
                                         (string-trim priv-msg)
                                         write!
                                         state))))
-           
-           ; process a user message
-            ([regexp #rx"(.*?):(.*)" (list _ user new-msg)]
-             (begin
-               (printf "[MSG] ~a wrote:~a\n" user new-msg)
-               (loop ((SshBot-msg-evt bot) user
-                                          (string-trim new-msg)
-                                          write!
-                                          state))))
-            
-            ; blank or malformed msg caught
-            (else
-             (begin
-               (displayln "uncategorized")
-               (loop state))))))
-    (loop (make-immutable-hash '())))
+          
+          ; process a user message
+          ([regexp #rx"(.*?):(.*)" (list _ user new-msg)]
+           (begin
+             (printf "[MSG] ~a wrote:~a\n" user new-msg)
+             (loop ((SshBot-msg-evt bot) user
+                                         (string-trim new-msg)
+                                         write!
+                                         state))))
+          
+          ; blank or malformed msg caught
+          (else
+           (begin
+             (displayln "uncategorized")
+             (loop state))))))
+  (loop (make-immutable-hash '())))
 
 
 ; Testing section for unit tests / etc
