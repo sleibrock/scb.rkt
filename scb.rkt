@@ -247,6 +247,20 @@ a bot, and create the core logic by overriding some functions.
                  (displayln (format "~a\r\n" msg) IN)
                  (flush-output IN)))
   (values S read! write!))
+
+
+
+; Make an oberserver thread to note for changes in bot state
+; TODO: flesh out the implementation properly
+(define (make-observer init-S)
+  (thread
+   (λ ()
+     (define (loop S)
+       (define mail (thread-receive))
+       (if (hash? mail)
+           (loop mail)
+           (loop S)))
+     (loop init-S)
   
 
 ; Main bot looping code to execute all logic
