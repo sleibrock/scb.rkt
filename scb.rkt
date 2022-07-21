@@ -259,7 +259,7 @@ a bot, and create the core logic by overriding some functions.
        (if (hash? mail)
            (loop mail)
            (loop S)))
-     (loop init-S)
+     (loop init-S))))
   
 
 ; Main bot looping code to execute all logic
