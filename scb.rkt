@@ -43,7 +43,12 @@ a bot, and create the core logic by overriding some functions.
          on-join
          on-leave
          add-scheduled-task
+
+         ; shortcuts
          pm
+         kick
+         ban
+         whois
          )
 
 
