@@ -249,7 +249,6 @@ a bot, and create the core logic by overriding some functions.
   (values S read! write!))
 
 
-
 ; Make an oberserver thread to note for changes in bot state
 ; TODO: flesh out the implementation properly
 (define (make-observer init-S)

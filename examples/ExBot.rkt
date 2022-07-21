@@ -1,12 +1,13 @@
 #lang racket/base
 
 #|
-This is an example prototype program.
-Showcases ideas used to create the bot
-and prototype new functionality.
+ExBot - an example ssh-chat bot
+
+This is an example prototype program. It is mainly
+used for testing new functionality of the scb.rkt library
 |#
 
-(require "scb.rkt")
+(require "../scb.rkt")
 
 (define-bot ExBot
   (host "0.0.0.0")

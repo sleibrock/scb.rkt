@@ -15,6 +15,10 @@ A "bot", short for robot, is a program that accepts some input and returns some 
 
 The ssh-chat Bot Framework is a Racket library designed at writing chat bots for `ssh-chat` in a way that is simple and painless. There are a myriad of options and values you can pass to an `ssh` connection, and the ssh-chat Bot Framework aims to reduce the amount of boilerplate and heavy backend lifting.
 
+### Example Bots
+
+The repository contains a few use-case examples of bots. Check the `/examples` folder at the root of this project.
+
 ### Basic Connection Bot
 
 Our library `scb.rkt` provides a way of defining a bot in a clean and simple manner. Using the provided `define-bot` macro, we can define the settings we want our bot to adhere to when connecting to a remote server. In the simplest case, the only thing that's needed to start a bot is the following:
@@ -65,7 +69,7 @@ To add logic, we must include a function the bot can defer information to. To do
   (on-msg
    (λ (usr msg writer ST)
      (writer "Hello!")
-	 ST)))
+     ST)))
 
 (run-bot MyBot)
 ```
@@ -147,7 +151,7 @@ A hash map in Racket is a simple data structure to use, but has some hang-ups. A
 
 A hash is a relational map between a series of keys and a series of values where `K -> V`. Macros are used to work with hashes in Racket since trying to index a key that does not exist will generate an error, unless you properly use `hash-has-key?` to check the existence of the key in the hash. Because of that, macros are used to help reduce boilerplate and modify/access the hash easier.
 
-### Custom Command Actions 
+### Custom Command Actions
 
 A custom action is a derivative of a general `on-msg` style bot. The difference is that the user shouldn't have to handle the message parsing aspect, and as such makes it easier to bind new functionality into a bot.
 
@@ -160,8 +164,8 @@ A custom action is a relation between a key and a function, where the key is the
   (port "22")
   (command "!hello"
     (λ (usr args writer ST)
-	  (writer (format "Hello ~a!" usr))
-	  ST)))
+      (writer (format "Hello ~a!" usr))
+      ST)))
 
 (run HelloBot)
 ```
@@ -238,7 +242,7 @@ This is where a `foldl` strategy comes into play. If we were to convert the name
 (define MyBot
   (foldl run-state (init-bot "MyBot")
     (list
-	  (host "127.0.0.1"))))
+      (host "127.0.0.1"))))
 ```
 
 Coincidentally, it's even easier to do this with a macro. After all, we're declaring our name twice here in the bot, once with the `define`, the other internally with the `struct`'s initiation. A macro could take care of this for us, and it'll look a lot cleaner.
@@ -246,8 +250,8 @@ Coincidentally, it's even easier to do this with a macro. After all, we're decla
 ```racket
 (define-syntax-rule (define-bot name fun ...)
   (define name
-    (foldl run-state (init-bot (format "~a" name))
-	                 (list funs ...))))
+    (foldl run-state (init-bot (format "~a" name)
+          (list funs ...))))
 ```
 
 Which then gives us:
@@ -258,8 +262,8 @@ Which then gives us:
   (port "22")
   (on-msg 
     (λ (usr msg writer ST)
-	  (writer "Hello!")
-	  ST)))
+      (writer "Hello!")
+      ST)))
 ```
 
 The collection of functions like `host`, `port` and `on-msg` are function factories for modifying the original state of the struct we defined. This ends up being cleaner, with less redundancies, and easier to write overall.
