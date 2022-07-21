@@ -23,7 +23,7 @@ a bot, and create the core logic by overriding some functions.
 |#
 
 
-(require (only-in racket/contract -> ->* define/contract and/c or/c any/c)
+(require (only-in racket/contract -> ->* define/contract and/c or/c any/c parameter/c)
          (only-in racket/match match)
          (only-in racket/string string-trim)
          "State.rkt"
@@ -49,7 +49,42 @@ a bot, and create the core logic by overriding some functions.
          kick
          ban
          whois
+
+         ; parameters
+         target-name
+         target-host
+         target-port
+         target-idfile
+         target-args
          )
+
+; These are parameters that define the four main options of an ssh-chat bot
+; When users define their bots, these parameters will help to abstract
+; any program argument logic their bots might want to include
+;
+; ex.
+; ./ExBot -h 192.168.1.1 -p 2022 -i ~/.ssh/keyfile -a SetTerm=xterm
+;
+; These will be used by `init-bot` to define the bot's initial data set
+(define/contract target-name
+  (parameter/c string?)
+  (make-parameter "bot"))
+
+(define/contract target-host
+  (parameter/c string?)
+  (make-parameter "0.0.0.0"))
+
+(define/contract target-port
+  (parameter/c (or/c string? number?))
+  (make-parameter "22"))
+
+(define/contract target-idfile
+  (parameter/c string?)
+  (make-parameter ""))
+
+(define/contract target-args
+  (parameter/c list?)
+  (make-parameter '()))
 
 
 ; the SshBot struct interface

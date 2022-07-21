@@ -257,7 +257,7 @@ Coincidentally, it's even easier to do this with a macro. After all, we're decla
 Which then gives us:
 
 ```racket
-(define MyBot
+(define-bot MyBot
   (host "192.168.1.1")
   (port "22")
   (on-msg 
@@ -267,3 +267,76 @@ Which then gives us:
 ```
 
 The collection of functions like `host`, `port` and `on-msg` are function factories for modifying the original state of the struct we defined. This ends up being cleaner, with less redundancies, and easier to write overall.
+
+### Multiple Bots, One Program
+
+It is possible to run multiple bots within the scope of one program. This would make it easier to set up multiple bots whose scope is similar.
+
+The goal here would be to set them up with their own thread, isolating their interactions far from each other. Using some basic Racket code, it's possible to create a list of threads for each bot definition, then you make the main thread wait for all the bots.
+
+```
+(define-bot Bot1
+  (host "0.0.0.0"))
+
+(define-bot Bot2
+  (host "0.0.0.0"))
+  
+(define threads
+ (map
+  (lambda (B)
+   (thread
+    (lambda ()
+     (run-bot B))))
+ (list Bot1 Bot2)))
+
+(for ([T threads])
+  (thread-wait T))
+```
+
+The bots will all run at the same time and the main thread will block until all threads are done.
+
+### Building, Distributing and Sharing
+
+(WIP) Converting Racket programs into executables is easy enough with the `raco exe` command. Going a step further, to cross-compile programs across systems, it might be better to use the command `raco cross` based off the `raco-cross` package.
+
+Converting a bot is easy enough because it's trivial to convert any of the above bot code into a binary. However, distributing a bot is similar to that of distributing any other program - making it customizable will go much further.
+
+Permanently sealing details like the `host` or the `port` means that distributing the bot program isn't effective - the connection details will be effectively sealed forever. For a user to download your fully-compiled bot program and run it, the configuration when compiled is not going to be useful for everyone.
+
+To make the bot flexible, the bot library comes with a macro to convert a given bot into a basic program that users can change the options at runtime via supplied program arguments. This exists as a macro because we want to design the program to be easy to use, and the macro will provide the abstraction for the command line processing by supplying code from `racket/cmdline`.
+
+```racket
+(define-bot CLIBot
+  (host "0.0.0.0")
+  (port "22")
+  (on-msg
+    (λ (usr msg writer ST)
+	  (writer "Hello!")
+	  ST)))
+
+(run-bot CLIBot)
+```
+
+Compiling this will forever target `0.0.0.0`, which isn't ideal and makes it hard to distribute and share your compiled programs if you were to ever become an `ssh-chat` bot merchant. If we were to leave these details out, however, then it would look a little different.
+
+```racket
+(define-bot CLIBot
+  (on-msg
+    (λ (usr msg writer ST)
+	  (writer "Hello!")
+	  ST)))
+
+(run-bot CLIBot)
+```
+
+The bot now includes no concrete details, and instead when the bot is created relies on parameters. Parameters are a special construct in Racket that are mutable and easy to preserve information across threads by simply preserving past states before mutation.
+
+By default, the Racket standard library provides `racket/cmdline` as a means of reading command line arguments and providing many interactions to configure a program. Making an interactive program where users can change the configuration of the bot requires a small `command-line` setup.
+
+```racket
+(command-line
+ #:program "MyBot"
+ #:once-each
+```
+
+TODO: needs more work
