@@ -26,10 +26,12 @@ a bot, and create the core logic by overriding some functions.
 (require (only-in racket/contract -> ->* define/contract and/c or/c any/c parameter/c)
          (only-in racket/match match)
          (only-in racket/string string-trim)
+         (only-in racket/cmdline command-line)
          "State.rkt"
          )
 
 (provide (struct-out SshBot)
+         (rename-out [command-line command-line])
          host
          port
          args
@@ -37,6 +39,7 @@ a bot, and create the core logic by overriding some functions.
          command
          debug-mode
          define-bot
+         define-program
          run-bot
          on-msg
          on-pm
@@ -56,6 +59,7 @@ a bot, and create the core logic by overriding some functions.
          target-port
          target-idfile
          target-args
+         *verbosity*
          )
 
 ; These are parameters that define the four main options of an ssh-chat bot
@@ -85,6 +89,11 @@ a bot, and create the core logic by overriding some functions.
 (define/contract target-args
   (parameter/c list?)
   (make-parameter '()))
+
+
+(define/contract *verbosity*
+  (parameter/c boolean?)
+  (make-parameter #f))
 
 
 ; the SshBot struct interface
@@ -225,7 +234,40 @@ a bot, and create the core logic by overriding some functions.
 (define-syntax-rule (while-alive S code ...)
   (if (eqv? 'running (subprocess-status S))
       (begin code ...)
-      (error "ssh process closed early")))
+      (error "SSH process closed early")))
+
+
+
+
+(define-syntax-rule (define-program name code ...)
+  (command-line
+   #:program (format "~a" 'name)
+   #:once-each
+   [("-v" "--verbose") "Turn on verbosity mode for debugging"
+                       (*verbosity* #t)]
+   #:multi
+   [("-H" "--host") new-host
+                    "Customize the host to connect to"
+                    (target-host new-host)]
+   [("-p" "--port") new-port
+                    "Customize the port to bind to"
+                    (target-port new-port)]
+   [("-a" "--args") new-args
+                    "Customize the SSH args to use"
+                    (target-args new-args)]
+   [("-i" "--identity") new-idfile
+                        "Customize the identity file to use (not pubkey)"
+                        (target-idfile new-idfile)]
+   #:args ()
+   (begin
+     (define-bot name
+       (host    (target-host))
+       (port    (target-port))
+       (args    (target-args))
+       (id-file (target-idfile))
+       code ...)
+     (run-bot name))))
+     
 
 
 ; Chat utility functions - helpers for generating proper ssh-chat commands
@@ -366,7 +408,7 @@ a bot, and create the core logic by overriding some functions.
           ; blank or malformed msg caught
           (else
            (begin
-             (displayln "uncategorized")
+             (printf "[ERR] caught ~a\n" trimmed-msg)
              (loop state))))))
   (loop (make-immutable-hash '())))
 

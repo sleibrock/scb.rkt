@@ -337,6 +337,10 @@ By default, the Racket standard library provides `racket/cmdline` as a means of 
 (command-line
  #:program "MyBot"
  #:once-each
+ ; todo
+ )
 ```
+
+In order to preserve the purity of the `init-bot` function, we will create a macro which wraps around the original code. This method does not work to compile programs that operate on multiple bots, and focuses instead only on running and distributing a program of one bot.
 
 TODO: needs more work
