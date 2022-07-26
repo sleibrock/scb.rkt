@@ -336,11 +336,60 @@ By default, the Racket standard library provides `racket/cmdline` as a means of 
 ```racket
 (command-line
  #:program "MyBot"
- #:once-each
- ; todo
- )
+ #:multi
+ [("-H" "--host") new-host
+                  (target-host)]
+ #:args ()
+ (begin
+  (define-bot MyBot
+    (host (target-host))
+	; whatever else
+	)))
 ```
 
-In order to preserve the purity of the `init-bot` function, we will create a macro which wraps around the original code. This method does not work to compile programs that operate on multiple bots, and focuses instead only on running and distributing a program of one bot.
+Using parameters to factor out hard-programmed constants is a great way of making a program more flexible for the user, but since we already have a macro defined to create a bot, it's hard to define a macro that can somehow abstract away the `init-bot` call and substitute in calls to parameters without making code a lot messier and more impure.
 
-TODO: needs more work
+Instead, we will use a second macro named `define-program`, which will use `define-bot` and use the parameters we can modify from the CLI to generate a new bot, and generate the necessary code to create a `command-line` stub.
+
+```racket
+(define-syntax-rule (define-program name code ...)
+  (command-line
+   #:program (format "~a" 'name)
+   #:once-each
+   [("-v" "--verbose") "Turn on verbosity mode for debugging"
+                       (*verbosity* #t)]
+   #:multi
+   [("-H" "--host") new-host
+                    "Customize the host to connect to"
+                    (target-host new-host)]
+   [("-p" "--port") new-port
+                    "Customize the port to bind to"
+                    (target-port new-port)]
+   [("-a" "--args") new-args
+                    "Customize the SSH args to use"
+                    (target-args new-args)]
+   [("-i" "--identity") new-idfile
+                        "Customize the identity file to use (not pubkey)"
+                        (target-idfile new-idfile)]
+   #:args ()
+   (begin
+     (define-bot name
+       (host    (target-host))
+       (port    (target-port))
+       (args    (target-args))
+       (id-file (target-idfile))
+       code ...)
+     (run-bot name))))
+```
+
+This macro creates for us a simple `command-line` function stub which simply creates a bot, then proceeds to run it. Using the `#:once-each` flags from `command-line`, we can toggle the parameters to adjust the bot's initial SSH connections, making the bot more portable for other users, who may wish to adjust the settings of the bot.
+
+Compiling the bot is then as simple as using `raco exe` to build a simple binary containing the Racket runtime with the bot code, or using `raco cross` (via package `raco-cross`) to create a binary that is cross-platform targeting.
+
+```racket
+(require "scb.rkt")
+
+(define-program Programbot
+  (on-pm (lambda (usr msg writer ST)
+            (writer (pm usr "Hello!")))))
+```

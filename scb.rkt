@@ -23,7 +23,7 @@ a bot, and create the core logic by overriding some functions.
 |#
 
 
-(require (only-in racket/contract -> ->* define/contract and/c or/c any/c parameter/c)
+(require (only-in racket/contract -> ->* define/contract and/c or/c any/c parameter/c integer-in)
          (only-in racket/match match)
          (only-in racket/string string-trim)
          (only-in racket/cmdline command-line)
@@ -62,6 +62,16 @@ a bot, and create the core logic by overriding some functions.
          *verbosity*
          )
 
+
+
+(define/contract (valid-port? v)
+  (-> (or/c string? number?) boolean?)
+  ((integer-in 1 65535)
+   (if (string? v)
+       (string->number v)
+       v)))
+
+
 ; These are parameters that define the four main options of an ssh-chat bot
 ; When users define their bots, these parameters will help to abstract
 ; any program argument logic their bots might want to include
@@ -79,7 +89,7 @@ a bot, and create the core logic by overriding some functions.
   (make-parameter "0.0.0.0"))
 
 (define/contract target-port
-  (parameter/c (or/c string? number?))
+  (parameter/c valid-port?)
   (make-parameter "22"))
 
 (define/contract target-idfile
@@ -94,6 +104,10 @@ a bot, and create the core logic by overriding some functions.
 (define/contract *verbosity*
   (parameter/c boolean?)
   (make-parameter #f))
+
+
+
+      
 
 
 ; the SshBot struct interface
@@ -113,7 +127,8 @@ a bot, and create the core logic by overriding some functions.
 ; using a struct-copy.
 ; In turn this is a little easier than having to remember long struct
 ; constructors with many args and provides an easier API for writing
-(define (init-bot name)
+(define/contract (init-bot name)
+  (-> string? SshBot?)
   (SshBot (format "~a" name)
           ""                            ; host
           "22"                          ; port
@@ -130,31 +145,36 @@ a bot, and create the core logic by overriding some functions.
 
 
 ; Change the host to a given host string (ex. "0.0.0.0" or "ssh.chat")
-(define (host new-host)
+(define/contract (host new-host)
+  (-> string? (-> SshBot? SshBot?))
   (λ (old-state)
     (struct-copy SshBot old-state [host new-host])))
 
 
 ; Change the port to a new given port (ex. "2022" or 22)
-(define (port new-port)
+(define/contract (port new-port)
+  (-> string? (-> SshBot? SshBot?))
   (λ (old-state)
     (struct-copy SshBot old-state [port new-port])))
 
 
 ; Change the arguments to supply to the ssh program
 ; (ex. ("-o SetTheme=mono" "-p 22"))
-(define (args new-args)
+(define/contract (args new-args)
+  (-> list? (-> SshBot? SshBot?))
   (λ (old-state)
     (struct-copy SshBot old-state [args new-args])))
 
 
 ; Change the id file to a provided one (ex. "~/.ssh/id_rsa")
-(define (id-file new-idfile)
+(define/contract (id-file new-idfile)
+  (-> string? (-> SshBot? SshBot?))
   (λ (old-state)
     (struct-copy SshBot old-state [idfile new-idfile])))
 
 
 (define (on-msg fun)
+  (-> procedure? (-> SshBot? SshBot?))
   (λ (old-state)
     (struct-copy SshBot old-state [msg-evt fun])))
 
@@ -166,7 +186,8 @@ a bot, and create the core logic by overriding some functions.
 ; Add a command for any users to invoke and execute a logic function
 ; TODO: check arguments to match whatever we need for invoking commands
 ; TODO: add a command hash to the bot to store commands
-(define (command keystr fun)
+(define/contract (command keystr fun)
+  (-> string? procedure? (-> SshBot? SshBot?))
   (λ (old-state)
     (let ([old-cmds (SshBot-cmds old-state)])
       (struct-copy SshBot old-state
@@ -174,7 +195,8 @@ a bot, and create the core logic by overriding some functions.
 
 
 ; Define an on-join function for when users enter the chat
-(define (on-join fun)
+(define/contract (on-join fun)
+  (-> procedure? (-> SshBot? SshBot?))
   (λ (old-state)
     (struct-copy SshBot old-state [join-evt fun])))
 
@@ -237,8 +259,8 @@ a bot, and create the core logic by overriding some functions.
       (error "SSH process closed early")))
 
 
-
-
+; Define a macro to create a program, abstracting away the connection
+; details and leaving that to the command-line program
 (define-syntax-rule (define-program name code ...)
   (command-line
    #:program (format "~a" 'name)
@@ -304,13 +326,20 @@ a bot, and create the core logic by overriding some functions.
 ; the general i/o function stubs to interact
 (define/contract (start-ssh bot)
   (-> SshBot? (values subprocess? procedure? procedure?))
+
+  (define host (SshBot-host bot))
+  (when (string=? "" (string-trim host))
+    (error 'start-ssh
+           "Cannot use empty/invalid host field, please use a valid host"))
+  
   (define-values (S OUT IN ERR)
     (let ([ssh (find-executable-path "ssh")])
       (if (eqv? #f ssh)
-          (error "Cannot create an ssh bot - no ssh detected on the system")
+          (error 'start-ssh
+                 "No SSH executable detected on the system")
           (apply subprocess
                  `(#f #f stdout
-                   ,(find-executable-path "ssh")
+                   ssh
                    ,(format "-p ~a" (SshBot-port bot))
                    ,@(let ([idfile (SshBot-idfile bot)])
                        (if (and (not (string=? "" idfile)) (file-exists? idfile))
@@ -321,7 +350,7 @@ a bot, and create the core logic by overriding some functions.
                    ,@(SshBot-args bot)
                    ,(format "~a@~a"
                             (SshBot-user bot)
-                            (SshBot-host bot)))))))
+                            host))))))
   (define (read!)
     (while-alive S (read-line OUT 'return)))
   (define (write! msg)
